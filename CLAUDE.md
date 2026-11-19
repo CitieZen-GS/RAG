@@ -54,9 +54,9 @@ Migrations de cada API via Flyway.
 
 ### Docker Compose
 
-- Toda API tem um `compose.yaml` **idêntico** ao da API de funções, com `name: api-funcoes`. O mesmo nome de projeto faz todas usarem os mesmos containers (um Oracle e um RabbitMQ) em vez de subir cópias que disputariam as portas.
-- Ao alterar o `compose.yaml` de uma API, replique a mudança nas outras.
-- Dependência `spring-boot-docker-compose` (`runtime`, `optional`): o `./mvnw spring-boot:run` sobe o compose e configura banco e RabbitMQ a partir dele. **Não** declare `spring.datasource` nem `spring.rabbitmq` no `application.yaml`.
+- Toda API tem um `dockerfiles/compose.yaml` **idêntico** ao da API de funções, com `name: api-funcoes`. O mesmo nome de projeto faz todas usarem os mesmos containers (um Oracle e um RabbitMQ) em vez de subir cópias que disputariam as portas.
+- Ao alterar o `dockerfiles/compose.yaml` de uma API, replique a mudança nas outras.
+- Dependência `spring-boot-docker-compose` (`runtime`, `optional`): o `./mvnw spring-boot:run` sobe o compose (caminho em `spring.docker.compose.file: dockerfiles/compose.yaml`) e configura banco e RabbitMQ a partir dele. **Não** declare `spring.datasource` nem `spring.rabbitmq` no `application.yaml`.
 - O Spring só para os containers que ele mesmo subiu. Se outra API já estava rodando, os containers são reaproveitados.
 - Ordem de subida: **API de funções primeiro**. As migrations dela criam as tabelas base (cargo, perfil, cuidador, idoso, parente...) das quais as outras dependem.
 
@@ -70,7 +70,7 @@ Migrations de cada API via Flyway.
 | API de autenticação | 8081 |
 | API de RAG | 8082 |
 
-A porta da API fica fixa em `server.port` no `application.yaml`. As portas do Oracle e do RabbitMQ vêm só do `compose.yaml`.
+A porta da API fica fixa em `server.port` no `application.yaml`. As portas do Oracle e do RabbitMQ vêm só do `dockerfiles/compose.yaml`.
 
 ### Credenciais de desenvolvimento
 
@@ -118,7 +118,7 @@ Testes (Testcontainers) começam com o Oracle vazio. Por isso as APIs que depend
 
 ## Deploy (Azure)
 
-- Cada API tem `azure-pipeline.yaml` na raiz e `scripts/azure-infra.sh`.
+- Cada API tem `azure-pipeline.yml` na raiz, `scripts/azure-infra.sh` (Azure CLI), `scripts/script-bd.sql` (DDL das suas tabelas), `dockerfiles/compose.yaml` e o desenho da arquitetura em `docs/`.
 - `API-Funcoes/scripts/azure-infra.sh` cria o grupo `gs-ajudantefamiliar`, o plano B1 `ajudante-familiar-SP`, o Application Insights `ai-ajudante-familiar`, o RabbitMQ no Azure Container Instance (`rabbitmq-ajudante-familiar.brazilsouth.azurecontainer.io`, usuário `ajudante`, senha digitada ao rodar) e o Web App da API de funções. Rode primeiro.
 - O script das outras APIs só cria o Web App `ajudante-familiar-<api>` nesse plano e o liga ao Application Insights.
 - O RAG precisa também da variável secreta `OPENAI_API_KEY` na pipeline.

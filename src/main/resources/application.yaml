@@ -2,7 +2,13 @@ spring:
   application:
     name: RAG
 
-  # Banco e RabbitMQ vêm do compose.yaml (spring-boot-docker-compose), igual às outras APIs.
+  # Docker Compose de desenvolvimento (Oracle e RabbitMQ), guardado na pasta dockerfiles/.
+  # Caminho relativo à pasta onde a aplicação é iniciada (a raiz do projeto).
+  docker:
+    compose:
+      file: dockerfiles/compose.yaml
+
+  # Banco e RabbitMQ vêm do dockerfiles/compose.yaml (spring-boot-docker-compose), igual às outras APIs.
   # Fora do Docker Compose, use as variáveis SPRING_DATASOURCE_* e SPRING_RABBITMQ_* (ver CLAUDE.md).
 
   # Flyway: migrations com o padrão M_RAG_VXX__descricao.sql
@@ -15,7 +21,7 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
 
-  # RabbitMQ: endereço vem do compose.yaml (local) ou de SPRING_RABBITMQ_* (nuvem).
+  # RabbitMQ: endereço vem do dockerfiles/compose.yaml (local) ou de SPRING_RABBITMQ_* (nuvem).
   # Consumidores: 3 tentativas com intervalo de 1s; depois a mensagem vai para a fila .dlq.
   rabbitmq:
     # Timeout curto: se o RabbitMQ cair, o pedido de relatório não fica travado esperando a conexão.

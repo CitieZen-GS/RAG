@@ -10,7 +10,7 @@
 # Usa o grupo de recursos, o plano B1 e o Application Insights criados pelo script
 # API-Funcoes/scripts/azure-infra.sh: rode aquele primeiro. Aqui só é criado o Web App.
 RESOURCE_GROUP_NAME="gs-ajudantefamiliar"
-WEB_APP_NAME="ajudante-familiar-rag"   # igual ao WEB_APP_NAME do azure-pipeline.yaml
+WEB_APP_NAME="ajudante-familiar-rag"   # igual ao WEB_APP_NAME do azure-pipeline.yml
 APP_SERVICE_PLAN="ajudante-familiar-SP"
 RUNTIME="JAVA:21-java21"
 APP_INSIGHTS_NAME="ai-ajudante-familiar"
