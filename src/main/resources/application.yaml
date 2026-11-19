@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: RAG
+
+  # Banco e RabbitMQ vêm do compose.yaml (spring-boot-docker-compose), igual às outras APIs.
+  # Fora do Docker Compose, use as variáveis SPRING_DATASOURCE_* e SPRING_RABBITMQ_* (ver CLAUDE.md).
+
+  # Flyway: migrations com o padrão M_RAG_VXX__descricao.sql
+  # Histórico próprio para não misturar com o das outras APIs.
+  # baseline-version 0: no schema já existente, aplica a partir da M_RAG_V01.
+  flyway:
+    locations: classpath:db/migration
+    sql-migration-prefix: M_RAG_V
+    table: flyway_historico_rag
+    baseline-on-migrate: true
+    baseline-version: 0
+
+  # O schema é gerenciado só pelo Flyway: o Hibernate não cria nem altera tabelas
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+  # Chave da OpenAI. O valor padrão só deixa a aplicação subir sem a chave (as chamadas à IA falham).
+  # Defina sempre a variável de ambiente OPENAI_API_KEY (secreta).
+  ai:
+    openai:
+      api-key: "${OPENAI_API_KEY:chave-nao-configurada}"
+
+# Porta fixa da API de RAG (padrão de portas no CLAUDE.md)
+server:
+  port: 8082
+
+# JWT: mesmo segredo das outras APIs (HS256, mínimo 32 caracteres).
+# Em produção, defina a variável de ambiente JWT_SEGREDO.
+jwt:
+  segredo: "${JWT_SEGREDO:ajudante-familiar-segredo-dev-troque-em-producao}"

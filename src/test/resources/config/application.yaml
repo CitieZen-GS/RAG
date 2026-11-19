@@ -1,0 +1,7 @@
+# Configuração extra, só nos testes (RagApplicationTests e TestRagApplication).
+# O Spring lê classpath:/config/application.yaml além do application.yaml principal, sem substituí-lo.
+spring:
+  flyway:
+    # O Oracle do Testcontainers começa vazio: as migrations de teste (versões 0.1 a 0.11) criam as
+    # tabelas da API de funções e, depois delas, rodam as M_RAG_V01 a V03 do RAG.
+    locations: classpath:db/migration,classpath:db/migration-teste

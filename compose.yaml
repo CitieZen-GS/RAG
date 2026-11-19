@@ -1,0 +1,29 @@
+# Projeto Docker Compose compartilhado por todas as APIs do Ajudante Familiar.
+# Com o mesmo nome, todas usam os mesmos containers (mesmo Oracle e mesmo RabbitMQ)
+# em vez de subir cópias que disputariam as portas 1521 e 5672.
+name: api-funcoes
+
+services:
+  oracle:
+    image: 'gvenzl/oracle-free:latest'
+    environment:
+      - 'ORACLE_PASSWORD=secret'
+      # Usuário/schema próprio da aplicação (criado no FREEPDB1 na primeira inicialização)
+      - 'APP_USER=ajudante'
+      - 'APP_USER_PASSWORD=secret'
+    ports:
+      - '1521:1521'
+    # O Spring só conecta quando o banco estiver pronto de verdade
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  rabbitmq:
+    image: 'rabbitmq:latest'
+    environment:
+      - 'RABBITMQ_DEFAULT_PASS=secret'
+      - 'RABBITMQ_DEFAULT_USER=myuser'
+    ports:
+      - '5672:5672'
