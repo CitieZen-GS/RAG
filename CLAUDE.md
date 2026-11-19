@@ -121,6 +121,7 @@ Testes (Testcontainers) começam com o Oracle vazio. Por isso as APIs que depend
 - Cada API tem `azure-pipeline.yaml` na raiz e `scripts/azure-infra.sh`.
 - `API-Funcoes/scripts/azure-infra.sh` cria o grupo `gs-ajudantefamiliar`, o plano B1 `ajudante-familiar-SP`, o Application Insights `ai-ajudante-familiar`, o RabbitMQ no Azure Container Instance (`rabbitmq-ajudante-familiar.brazilsouth.azurecontainer.io`, usuário `ajudante`, senha digitada ao rodar) e o Web App da API de funções. Rode primeiro.
 - O script das outras APIs só cria o Web App `ajudante-familiar-<api>` nesse plano e o liga ao Application Insights.
+- O RAG precisa também da variável secreta `OPENAI_API_KEY` na pipeline.
 - Credenciais (banco, RabbitMQ, `JWT_SEGREDO`) nunca vão nos scripts: a pipeline grava no Web App a cada deploy.
 
 ## Contrato do JWT (autenticação → outras APIs)
@@ -172,7 +173,8 @@ As APIs compartilham o banco, então mensagens **não** servem para copiar dados
 
 | Evento | Routing key | Publica | Consome | Campos | Efeito |
 |---|---|---|---|---|---|
-| `AcessoRevogadoEvento` | `autenticacao.acesso-revogado` | autenticação, no `/sair` com `tokenAcesso` | funções (`funcoes.acesso-revogado`) | `jti`, `idUsuario`, `tipoUsuario`, `expiraEm`, `revogadoEm`, `motivo` | o JWT com esse `jti` é recusado (401) até expirar; lista em memória |
+| `AcessoRevogadoEvento` | `autenticacao.acesso-revogado` | autenticação, no `/sair` com `tokenAcesso` | funções (`funcoes.acesso-revogado`) e RAG (`rag.acesso-revogado`) | `jti`, `idUsuario`, `tipoUsuario`, `expiraEm`, `revogadoEm`, `motivo` | o JWT com esse `jti` é recusado (401) até expirar; lista em memória |
+| `RelatorioSolicitadoEvento` | `rag.relatorio-solicitado` | RAG, após gravar o relatório `GERANDO` | RAG (`rag.relatorio-solicitado`) | `idRelatorio` | gera o relatório com a IA e marca `CONCLUIDO`/`ERRO`; RabbitMQ fora do ar no pedido → `ERRO` na hora |
 
 ## API de RAG (porta 8082)
 
@@ -187,6 +189,41 @@ Chat do cuidador sobre a linha do tempo do idoso e geração de relatórios, com
 | `T_Ajudante_familiar_Mensagem_Chat` | mensagens da conversa | `tp_autor` CUIDADOR ou ASSISTENTE; conteúdo em CLOB; ordem por `dt_envio` |
 | `T_Ajudante_familiar_Relatorio` | relatórios gerados | `tp_relatorio` GERAL, MEDICAMENTOS, ALIMENTACAO, ATIVIDADES ou CONSULTAS; `st_relatorio` GERANDO → CONCLUIDO ou ERRO; período com `dt_fim_periodo >= dt_inicio_periodo` |
 
+- **Acesso:** só CUIDADOR (FAMILIAR recebe 403 em tudo), e só aos idosos dele: toda rota chama `AcessoIdosoService.buscarIdosoDoCuidador` antes de ler dados do idoso (outro cuidador recebe 403; idoso inexistente, 404).
 - Enums gravados pelo nome (`@Enumerated(EnumType.STRING)`), iguais aos valores das constraints.
 - Datas de criação/envio preenchidas em `@PrePersist`.
 - Variável de ambiente própria: `OPENAI_API_KEY` (secreta). Sem ela a aplicação sobe, mas as chamadas à IA falham.
+
+### Rotas da API de RAG (porta 8082, só CUIDADOR)
+
+| Método | Rota | O que faz |
+|---|---|---|
+| POST | `/idosos/{idIdoso}/chat` | `{"pergunta", "dataInicio"?, "dataFim"?}` → resposta da IA + `periodoConsultado`. Grava pergunta e resposta |
+| GET | `/idosos/{idIdoso}/chat?limite=50` | histórico em ordem cronológica (1 a 200 mensagens) |
+| DELETE | `/idosos/{idIdoso}/chat` | apaga as mensagens (a memória recomeça) |
+| POST | `/idosos/{idIdoso}/relatorios` | `{"tipo", "dataInicio", "dataFim", "titulo"?, "solicitacao"?}` → **202** com status `GERANDO` |
+| GET | `/idosos/{idIdoso}/relatorios` | lista sem o conteúdo, mais recentes primeiro |
+| GET | `/idosos/{idIdoso}/relatorios/{id}` | relatório com o conteúdo em Markdown (consultar até `CONCLUIDO` ou `ERRO`) |
+| DELETE | `/idosos/{idIdoso}/relatorios/{id}` | remove o relatório |
+
+Erros: 400 dados inválidos, 401 token ausente/revogado, 403 familiar ou idoso de outro cuidador, 404 não encontrado, 422 período inválido, 503 IA não respondeu (nada é gravado).
+
+### Como uma pergunta é respondida
+
+1. `AcessoIdosoService` confere o dono do idoso.
+2. `PeriodoService` define o período: datas do app (`INFORMADO`) → IA lê a pergunta (`IDENTIFICADO_PELA_IA`, resposta estruturada `PeriodoIdentificado`) → últimos 7 dias (`PADRAO`). A IA recebe a pergunta anterior para entender continuações ("e no jantar?").
+3. `LinhaDoTempoService` monta o contexto: dados do idoso, doenças e registros do período em ordem cronológica.
+4. `ChatService` envia à IA: prompt de sistema (`services/ia/PromptsIa`, com o contexto) + últimas mensagens (memória) + pergunta.
+5. Pergunta e resposta são gravadas. A chamada à IA fica fora de transação (leva segundos).
+
+Prompts ficam todos em `PromptsIa`: responder só com o contexto, citar datas, dizer quando não há registro, nunca diagnosticar nem sugerir mudar medicação.
+
+### Configurações (`rag.*` no application.yaml, classe `PropriedadesRag`)
+
+`fuso-horario` (America/Sao_Paulo: "hoje" e datas gravadas no horário do Brasil, o Azure roda em UTC), `periodo-padrao-dias` (7), `periodo-maximo-dias` (90), `historico-mensagens` (10), `limite-registros` (400). Modelo da IA: `OPENAI_MODELO` (padrão `gpt-5-mini`).
+
+### Cuidados
+
+- `pom.xml`: o `spring-ai-starter-model-openai` exclui `io.swagger.core.v3:swagger-annotations` (versão antiga trazida pelo Spring AI). Sem a exclusão, o `/v3/api-docs` quebra com `NoSuchMethodError`.
+- Gravações dentro de `@TransactionalEventListener` (depois do commit) precisam de transação nova (`PROPAGATION_REQUIRES_NEW`), senão são ignoradas sem erro. Ver `PublicadorEventos.marcarErro`.
+- Testes não chamam a OpenAI: use `apoio/IaFalsa` com `ChatClient.create(iaFalsa)`.

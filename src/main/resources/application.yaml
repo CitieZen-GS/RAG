@@ -15,6 +15,19 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
 
+  # RabbitMQ: endereço vem do compose.yaml (local) ou de SPRING_RABBITMQ_* (nuvem).
+  # Consumidores: 3 tentativas com intervalo de 1s; depois a mensagem vai para a fila .dlq.
+  rabbitmq:
+    # Timeout curto: se o RabbitMQ cair, o pedido de relatório não fica travado esperando a conexão.
+    connection-timeout: 5s
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+
   # O schema é gerenciado só pelo Flyway: o Hibernate não cria nem altera tabelas
   jpa:
     hibernate:
@@ -26,6 +39,17 @@ spring:
   ai:
     openai:
       api-key: "${OPENAI_API_KEY:chave-nao-configurada}"
+      chat:
+        # Modelo da OpenAI. Padrão do Spring AI 2.0: gpt-5-mini (bom custo para chat e relatórios).
+        model: "${OPENAI_MODELO:gpt-5-mini}"
+
+# Regras do RAG (ver PropriedadesRag)
+rag:
+  fuso-horario: America/Sao_Paulo   # "hoje"/"ontem" no horário do Brasil (o Azure roda em UTC)
+  periodo-padrao-dias: 7            # pergunta sem período: últimos 7 dias
+  periodo-maximo-dias: 90           # maior período por pergunta ou relatório
+  historico-mensagens: 10           # mensagens anteriores enviadas à IA como memória
+  limite-registros: 400             # máximo de registros da linha do tempo por chamada
 
 # Porta fixa da API de RAG (padrão de portas no CLAUDE.md)
 server:
@@ -35,3 +59,11 @@ server:
 # Em produção, defina a variável de ambiente JWT_SEGREDO.
 jwt:
   segredo: "${JWT_SEGREDO:ajudante-familiar-segredo-dev-troque-em-producao}"
+
+# Swagger / OpenAPI (springdoc): http://localhost:8082/swagger-ui.html
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+    persist-authorization: true

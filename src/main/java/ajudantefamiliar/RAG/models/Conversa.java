@@ -44,8 +44,11 @@ public class Conversa {
     @OrderBy("dataEnvio ASC")
     private List<MensagemChat> mensagens = new ArrayList<>();
 
+    /** O service preenche no fuso do Brasil (rag.fuso-horario); aqui só completa se faltar. */
     @PrePersist
     void aoCriar() {
-        dataCriacao = LocalDateTime.now();
+        if (dataCriacao == null) {
+            dataCriacao = LocalDateTime.now();
+        }
     }
 }

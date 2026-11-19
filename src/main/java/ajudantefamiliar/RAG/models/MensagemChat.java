@@ -37,8 +37,11 @@ public class MensagemChat {
     @Column(name = "dt_envio", nullable = false, updatable = false)
     private LocalDateTime dataEnvio;
 
+    /** O service preenche no fuso do Brasil (rag.fuso-horario); aqui só completa se faltar. */
     @PrePersist
     void aoCriar() {
-        dataEnvio = LocalDateTime.now();
+        if (dataEnvio == null) {
+            dataEnvio = LocalDateTime.now();
+        }
     }
 }
