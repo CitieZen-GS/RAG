@@ -1,0 +1,306 @@
+# Pipeline CI/CD da API de RAG (Ajudante Familiar)
+#
+# Variáveis que precisam ser criadas no Azure DevOps (Pipeline > Edit > Variables),
+# marcadas como secretas ("Keep this value secret") quando forem senhas ou segredos:
+#   SPRING_DATASOURCE_URL       ex.: jdbc:oracle:thin:@//host:1521/FREEPDB1
+#   SPRING_DATASOURCE_USERNAME
+#   SPRING_DATASOURCE_PASSWORD  (secreta)
+#   SPRING_RABBITMQ_HOST
+#   SPRING_RABBITMQ_PORT        ex.: 5672
+#   SPRING_RABBITMQ_USERNAME
+#   SPRING_RABBITMQ_PASSWORD    (secreta)
+#   JWT_SEGREDO                 (secreta) mínimo 32 caracteres, IGUAL ao das outras APIs
+#   OPENAI_API_KEY              (secreta) chave da OpenAI usada pelo chat e pelos relatórios
+#
+# Antes do primeiro deploy: a API de funções precisa já estar no ar apontando para o mesmo banco,
+# porque as migrations do RAG dependem das tabelas criadas por ela.
+#
+# O Web App deve ser Linux com runtime Java SE 21. O App Service define a porta
+# do servidor sozinho (-Dserver.port=80), não é preciso configurar SERVER_PORT.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  JAVA_VERSION: '21'
+  WEB_APP_NAME: 'ajudante-familiar-rag'
+  ARTIFACT_NAME: 'app'
+
+stages:
+  - stage: CI
+    displayName: 'CI - Build e Testes'
+    jobs:
+      - job: Build
+        displayName: 'Compilar, testar e empacotar'
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: 'Configurar Java $(JAVA_VERSION)'
+            inputs:
+              versionSpec: '$(JAVA_VERSION)'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          # Os testes usam Testcontainers (Oracle Free e RabbitMQ) com o Docker do agente.
+          # As migrations de teste (src/test/resources/db/migration-teste) criam as tabelas da API de funções.
+          - task: Maven@4
+            displayName: 'Maven - Compilar e executar testes'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean package'
+              options: '-B'
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              testRunTitle: 'Testes da API de RAG'
+              javaHomeOption: 'Path'
+              jdkDirectory: '$(JAVA_HOME_21_X64)'
+              mavenVersionOption: 'Default'
+
+          - task: CopyFiles@2
+            displayName: 'Preparar artefato JAR'
+            inputs:
+              SourceFolder: '$(System.DefaultWorkingDirectory)'
+              Contents: '**/target/*.jar'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/$(ARTIFACT_NAME)'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publicar artefato $(ARTIFACT_NAME)'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/$(ARTIFACT_NAME)'
+              artifact: '$(ARTIFACT_NAME)'
+              publishLocation: 'pipeline'
+
+  - stage: CD
+    displayName: 'CD - Deploy no Azure Web App'
+    dependsOn: CI
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: 'Deploy Spring Boot'
+        environment: 'ajudante-familiar-rag'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: '$(ARTIFACT_NAME)'
+
+                - task: AzureAppServiceSettings@1
+                  displayName: 'Configurar variáveis de ambiente do Web App'
+                  inputs:
+                    azureSubscription: 'MyAzureSubscription'
+                    appName: '$(WEB_APP_NAME)'
+                    appSettings: |
+                      [
+                        {
+                          "name": "SPRING_DATASOURCE_URL",
+                          "value": "$(SPRING_DATASOURCE_URL)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_DATASOURCE_USERNAME",
+                          "value": "$(SPRING_DATASOURCE_USERNAME)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_DATASOURCE_PASSWORD",
+                          "value": "$(SPRING_DATASOURCE_PASSWORD)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_HOST",
+                          "value": "$(SPRING_RABBITMQ_HOST)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_PORT",
+                          "value": "$(SPRING_RABBITMQ_PORT)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_USERNAME",
+                          "value": "$(SPRING_RABBITMQ_USERNAME)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_PASSWORD",
+                          "value": "$(SPRING_RABBITMQ_PASSWORD)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "JWT_SEGREDO",
+                          "value": "$(JWT_SEGREDO)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "OPENAI_API_KEY",
+                          "value": "$(OPENAI_API_KEY)",
+                          "slotSetting": false
+                        }
+                      ]
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy via Zip Deploy'
+                  inputs:
+                    azureSubscription: 'MyAzureSubscription'
+                    appType: 'webAppLinux'
+                    appName: '$(WEB_APP_NAME)'
+                    package: '$(Pipeline.Workspace)/$(ARTIFACT_NAME)/**/*.jar'
+                    deploymentMethod: 'zipDeploy'
+# Pipeline CI/CD da API de RAG (Ajudante Familiar)
+#
+# Variáveis que precisam ser criadas no Azure DevOps (Pipeline > Edit > Variables),
+# marcadas como secretas ("Keep this value secret") quando forem senhas ou segredos:
+#   SPRING_DATASOURCE_URL       ex.: jdbc:oracle:thin:@//host:1521/FREEPDB1
+#   SPRING_DATASOURCE_USERNAME
+#   SPRING_DATASOURCE_PASSWORD  (secreta)
+#   SPRING_RABBITMQ_HOST
+#   SPRING_RABBITMQ_PORT        ex.: 5672
+#   SPRING_RABBITMQ_USERNAME
+#   SPRING_RABBITMQ_PASSWORD    (secreta)
+#   JWT_SEGREDO                 (secreta) mínimo 32 caracteres, IGUAL ao das outras APIs
+#   OPENAI_API_KEY              (secreta) chave da OpenAI usada pelo chat e pelos relatórios
+#
+# Antes do primeiro deploy: a API de funções precisa já estar no ar apontando para o mesmo banco,
+# porque as migrations do RAG dependem das tabelas criadas por ela.
+#
+# O Web App deve ser Linux com runtime Java SE 21. O App Service define a porta
+# do servidor sozinho (-Dserver.port=80), não é preciso configurar SERVER_PORT.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  JAVA_VERSION: '21'
+  WEB_APP_NAME: 'ajudante-familiar-rag'
+  ARTIFACT_NAME: 'app'
+
+stages:
+  - stage: CI
+    displayName: 'CI - Build e Testes'
+    jobs:
+      - job: Build
+        displayName: 'Compilar, testar e empacotar'
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: 'Configurar Java $(JAVA_VERSION)'
+            inputs:
+              versionSpec: '$(JAVA_VERSION)'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          # Os testes usam Testcontainers (Oracle Free e RabbitMQ) com o Docker do agente.
+          # As migrations de teste (src/test/resources/db/migration-teste) criam as tabelas da API de funções.
+          - task: Maven@4
+            displayName: 'Maven - Compilar e executar testes'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean package'
+              options: '-B'
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              testRunTitle: 'Testes da API de RAG'
+              javaHomeOption: 'Path'
+              jdkDirectory: '$(JAVA_HOME_21_X64)'
+              mavenVersionOption: 'Default'
+
+          - task: CopyFiles@2
+            displayName: 'Preparar artefato JAR'
+            inputs:
+              SourceFolder: '$(System.DefaultWorkingDirectory)'
+              Contents: '**/target/*.jar'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/$(ARTIFACT_NAME)'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publicar artefato $(ARTIFACT_NAME)'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/$(ARTIFACT_NAME)'
+              artifact: '$(ARTIFACT_NAME)'
+              publishLocation: 'pipeline'
+
+  - stage: CD
+    displayName: 'CD - Deploy no Azure Web App'
+    dependsOn: CI
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: 'Deploy Spring Boot'
+        environment: 'ajudante-familiar-rag'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: '$(ARTIFACT_NAME)'
+
+                - task: AzureAppServiceSettings@1
+                  displayName: 'Configurar variáveis de ambiente do Web App'
+                  inputs:
+                    azureSubscription: 'MyAzureSubscription'
+                    appName: '$(WEB_APP_NAME)'
+                    appSettings: |
+                      [
+                        {
+                          "name": "SPRING_DATASOURCE_URL",
+                          "value": "$(SPRING_DATASOURCE_URL)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_DATASOURCE_USERNAME",
+                          "value": "$(SPRING_DATASOURCE_USERNAME)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_DATASOURCE_PASSWORD",
+                          "value": "$(SPRING_DATASOURCE_PASSWORD)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_HOST",
+                          "value": "$(SPRING_RABBITMQ_HOST)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_PORT",
+                          "value": "$(SPRING_RABBITMQ_PORT)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_USERNAME",
+                          "value": "$(SPRING_RABBITMQ_USERNAME)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "SPRING_RABBITMQ_PASSWORD",
+                          "value": "$(SPRING_RABBITMQ_PASSWORD)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "JWT_SEGREDO",
+                          "value": "$(JWT_SEGREDO)",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "OPENAI_API_KEY",
+                          "value": "$(OPENAI_API_KEY)",
+                          "slotSetting": false
+                        }
+                      ]
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy via Zip Deploy'
+                  inputs:
+                    azureSubscription: 'MyAzureSubscription'
+                    appType: 'webAppLinux'
+                    appName: '$(WEB_APP_NAME)'
+                    package: '$(Pipeline.Workspace)/$(ARTIFACT_NAME)/**/*.jar'
+                    deploymentMethod: 'zipDeploy'
