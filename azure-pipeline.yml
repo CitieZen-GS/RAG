@@ -30,6 +30,9 @@ variables:
   JAVA_VERSION: '21'
   WEB_APP_NAME: 'ajudante-familiar-rag'
   ARTIFACT_NAME: 'app'
+  # Mesmo grupo do scripts/azure-infra.sh. Informar o grupo faz as tarefas de deploy acharem o
+  # Web App direto nele, sem precisar de permissão de leitura na assinatura inteira.
+  RESOURCE_GROUP_NAME: 'gs-ajudantefamiliar'
 
 stages:
   - stage: CI
@@ -94,6 +97,7 @@ stages:
                   inputs:
                     azureSubscription: 'MyAzureSubscription'
                     appName: '$(WEB_APP_NAME)'
+                    resourceGroupName: '$(RESOURCE_GROUP_NAME)'
                     appSettings: |
                       [
                         {
@@ -149,5 +153,8 @@ stages:
                     azureSubscription: 'MyAzureSubscription'
                     appType: 'webAppLinux'
                     appName: '$(WEB_APP_NAME)'
+                    deployToSlotOrASE: true
+                    resourceGroupName: '$(RESOURCE_GROUP_NAME)'
+                    slotName: 'production'
                     package: '$(Pipeline.Workspace)/$(ARTIFACT_NAME)/**/*.jar'
                     deploymentMethod: 'zipDeploy'
