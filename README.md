@@ -320,7 +320,7 @@ RAG/
 
 ## 9. Deploy na Azure
 
-1. **Infraestrutura:** [`scripts/azure-infra.sh`](scripts/azure-infra.sh) é o mesmo arquivo nos 3 repositórios (mantido igual por [`scripts/sincronizar-infra.sh`](scripts/sincronizar-infra.sh)) e cria tudo de uma vez: grupo `gs-ajudantefamiliar`, plano B1 `ajudante-familiar-SP`, Application Insights, RabbitMQ no Azure Container Instance e os 3 Web Apps (incluindo o `ajudante-familiar-rag`). Rode uma vez (`az login` e `bash scripts/azure-infra.sh`), de qualquer repositório; o que já existe é mantido.
+1. **Infraestrutura:** [`scripts/azure-infra.sh`](scripts/azure-infra.sh) é o mesmo arquivo nos 3 repositórios (mantido igual por [`scripts/sincronizar-infra.sh`](scripts/sincronizar-infra.sh)) e cria tudo de uma vez: grupo `gs-ajudantefamiliar`, plano B3 `ajudante-familiar-SP`, Application Insights, RabbitMQ e banco Oracle em Azure Container Instances e os 3 Web Apps (incluindo o `ajudante-familiar-rag`). Rode uma vez (`az login` e `bash scripts/azure-infra.sh`), de qualquer repositório; o que já existe é mantido.
 2. A pipeline [`azure-pipeline.yml`](azure-pipeline.yml) roda a cada merge na `main`: **CI** (build, testes, resultados JUnit e `.jar`) e **CD** (variáveis no Web App + Zip Deploy).
 3. Variáveis da pipeline: `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, `JWT_SEGREDO` (igual nas 3 APIs) e **`OPENAI_API_KEY`**, com senhas, segredo e chave marcados como secretos.
 
