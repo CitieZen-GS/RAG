@@ -119,8 +119,7 @@ Testes (Testcontainers) começam com o Oracle vazio. Por isso as APIs que depend
 ## Deploy (Azure)
 
 - Cada API tem `azure-pipeline.yml` na raiz, `scripts/azure-infra.sh` (Azure CLI), `scripts/script-bd.sql` (DDL das suas tabelas), `dockerfiles/compose.yaml` e o desenho da arquitetura em `docs/`.
-- `API-Funcoes/scripts/azure-infra.sh` cria o grupo `gs-ajudantefamiliar`, o plano B1 `ajudante-familiar-SP`, o Application Insights `ai-ajudante-familiar`, o RabbitMQ no Azure Container Instance (`rabbitmq-ajudante-familiar.brazilsouth.azurecontainer.io`, usuário `ajudante`, senha digitada ao rodar) e o Web App da API de funções. Rode primeiro.
-- O script das outras APIs só cria o Web App `ajudante-familiar-<api>` nesse plano e o liga ao Application Insights.
+- `scripts/azure-infra.sh` é **idêntico nos 3 repositórios** (alterou um, rode `bash scripts/sincronizar-infra.sh --copiar` para replicar nos outros; sem opção ele só confere) e cria toda a infraestrutura: grupo `gs-ajudantefamiliar`, plano B1 `ajudante-familiar-SP`, Application Insights `ai-ajudante-familiar`, RabbitMQ no Azure Container Instance (`rabbitmq-ajudante-familiar.brazilsouth.azurecontainer.io`, usuário `ajudante`, senha digitada na criação) e os 3 Web Apps `ajudante-familiar-<api>`. Recursos existentes são mantidos.
 - O RAG precisa também da variável secreta `OPENAI_API_KEY` na pipeline.
 - Credenciais (banco, RabbitMQ, `JWT_SEGREDO`) nunca vão nos scripts: a pipeline grava no Web App a cada deploy.
 

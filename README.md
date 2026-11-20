@@ -23,6 +23,7 @@ Entrega de **Disruptive Architectures: IoT, IoB & Generative IA**. Também faz p
 | App Mobile | https://github.com/CitieZen-GS/Mobile |
 | Deploy desta API (Swagger) | https://ajudante-familiar-rag.azurewebsites.net/swagger-ui.html |
 | Evidências de avaliação | [docs/avaliacao.md](docs/avaliacao.md) |
+| Acesso à chave da OpenAI | [como avaliar a IA](#acesso-à-chave-da-openai) |
 
 > Endereço de deploy: confira o **Domínio padrão** do Web App no portal da Azure antes da entrega.
 
@@ -142,8 +143,30 @@ Todos ficam em [`PromptsIa`](src/main/java/ajudantefamiliar/RAG/services/ia/Prom
 ### Pré-requisitos
 
 - **JDK 21** e **Docker Desktop** aberto ("Engine running", modo Linux containers)
-- Uma **chave da OpenAI** (sem ela a aplicação sobe, mas o chat e os relatórios respondem 503 / `ERRO`)
+- Uma **chave da OpenAI** (sem ela a aplicação sobe, mas o chat e os relatórios respondem 503 / `ERRO`). Veja [Acesso à chave da OpenAI](#acesso-à-chave-da-openai)
 - A **[API de funções](https://github.com/CitieZen-GS/API-Funcoes) rodando ou já executada uma vez** no mesmo banco (ela cria as tabelas de onde o RAG lê) e a **[API de autenticação](https://github.com/CitieZen-GS/API-autentificador)** para obter o token
+
+### Acesso à chave da OpenAI
+
+A chave da OpenAI do grupo **não fica no repositório**: ela dá acesso à conta paga do grupo, e o GitHub bloqueia o envio de chaves expostas. Há três formas de avaliar a IA:
+
+| Forma | Como | Precisa de chave? |
+|---|---|---|
+| **Pelo deploy na Azure (recomendado)** | abra o Swagger do [deploy do RAG](#links), faça login na API de autenticação e use o token no **Authorize**. A chave já está configurada no Web App | não |
+| **Localmente, com a sua chave** | crie uma em [platform.openai.com/api-keys](https://platform.openai.com/api-keys) (a conta precisa ter créditos) e defina `OPENAI_API_KEY` como mostrado abaixo | sim, a sua |
+| **Localmente, com a chave de avaliação do grupo** | use a chave que está no arquivo `.txt` da entrega no Portal do Aluno | sim, a do `.txt` |
+
+**Chave de avaliação para o professor**
+
+- A chave está no **arquivo `.txt` de identificação** entregue no **Portal do Aluno**, junto com os nomes, RMs e o link do repositório. Esse arquivo vai só para o professor e **não faz parte do repositório**.
+- Para usar: copie o valor de `OPENAI_API_KEY` do `.txt` e defina a variável de ambiente como mostrado em [Configuração](#configuração-sem-credenciais-no-código), antes de subir a aplicação.
+- A chave é **exclusiva para a avaliação** e tem **limite de gasto**. Ela será **apagada depois da divulgação das notas**. Por favor, não a compartilhe nem a coloque em arquivos versionados.
+- Se a chave não funcionar, fale com **Iago D. Ainette (RM565708)** pelo Teams ou pelo e-mail institucional da FIAP.
+
+**Como a chave é protegida na Azure**
+
+- Fica na variável **secreta** `OPENAI_API_KEY` da pipeline do RAG (Azure DevOps > Pipelines > RAG > Edit > Variables). Quem tem acesso ao projeto vê que a variável existe, mas o valor aparece só como `***`, inclusive nos logs.
+- A cada deploy, a pipeline grava a chave nas configurações do Web App `ajudante-familiar-rag`, de onde a aplicação a lê como variável de ambiente.
 
 ### Configuração (sem credenciais no código)
 
@@ -248,7 +271,7 @@ Resumo (a descrição completa, com os casos de teste, está em [docs/avaliacao.
 
 ## 7. Uso responsável e limitações
 
-**Credenciais.** A chave da OpenAI, as senhas do banco e do RabbitMQ e o `JWT_SEGREDO` ficam só em variáveis de ambiente (local) e em variáveis secretas do Azure DevOps (nuvem). O repositório tem apenas o modelo [`.env.example`](.env.example), sem valores reais, e o `.env` está no `.gitignore`.
+**Credenciais.** A chave da OpenAI, as senhas do banco e do RabbitMQ e o `JWT_SEGREDO` ficam só em variáveis de ambiente (local) e em variáveis secretas do Azure DevOps (nuvem). O repositório tem apenas o modelo [`.env.example`](.env.example), sem valores reais, e o `.env` está no `.gitignore`. A chave de avaliação do professor vai só no `.txt` entregue no Portal do Aluno e é apagada depois da correção ([detalhes](#acesso-à-chave-da-openai)).
 
 **Dados pessoais e de saúde.**
 
@@ -278,7 +301,8 @@ RAG/
 │   ├── avaliacao.md            # evidências de avaliação
 │   └── *.png                   # desenho da arquitetura
 ├── scripts/
-│   ├── azure-infra.sh          # Azure CLI: Web App do RAG no plano compartilhado
+│   ├── azure-infra.sh          # Azure CLI: toda a infraestrutura (igual nos 3 repositórios)
+│   ├── sincronizar-infra.sh    # confere ou replica os scripts de infra nos 3 repositórios
 │   └── script-bd.sql           # DDL das tabelas de conversa, mensagens e relatórios
 ├── src/main/java/ajudantefamiliar/RAG/
 │   ├── controller/             # chat, relatórios, tratamento de erros
@@ -296,7 +320,7 @@ RAG/
 
 ## 9. Deploy na Azure
 
-1. Depois do script da API de funções, rode [`scripts/azure-infra.sh`](scripts/azure-infra.sh): cria o Web App `ajudante-familiar-rag` (Java 21, Always On) no plano `ajudante-familiar-SP`, ligado ao Application Insights.
+1. **Infraestrutura:** [`scripts/azure-infra.sh`](scripts/azure-infra.sh) é o mesmo arquivo nos 3 repositórios (mantido igual por [`scripts/sincronizar-infra.sh`](scripts/sincronizar-infra.sh)) e cria tudo de uma vez: grupo `gs-ajudantefamiliar`, plano B1 `ajudante-familiar-SP`, Application Insights, RabbitMQ no Azure Container Instance e os 3 Web Apps (incluindo o `ajudante-familiar-rag`). Rode uma vez (`az login` e `bash scripts/azure-infra.sh`), de qualquer repositório; o que já existe é mantido.
 2. A pipeline [`azure-pipeline.yml`](azure-pipeline.yml) roda a cada merge na `main`: **CI** (build, testes, resultados JUnit e `.jar`) e **CD** (variáveis no Web App + Zip Deploy).
 3. Variáveis da pipeline: `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, `JWT_SEGREDO` (igual nas 3 APIs) e **`OPENAI_API_KEY`**, com senhas, segredo e chave marcados como secretos.
 
